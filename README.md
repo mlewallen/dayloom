@@ -65,6 +65,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Contact
 
-Miguel Lewallen - [GitHub Profile](https://github.com/mlewallen)
+Mike Lewallen - [GitHub Profile](https://github.com/mlewallen)
 
 Project Link: [https://github.com/mlewallen/dayloom](https://github.com/mlewallen/dayloom)
