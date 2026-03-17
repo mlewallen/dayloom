@@ -292,8 +292,8 @@ function renderGoalItem(goal) {
   const prog = countProgress(goal.content || '');
   const pct = prog.total > 0 ? Math.round(prog.checked / prog.total * 100) : 0;
   const hasContent = goal.content && goal.content.trim();
-  return `<div class="task-item" style="align-items:center;" onclick="openGoalDrawer('${goal.id}')">
-    <div style="width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+  return `<div class="task-item${goal.achieved ? ' done' : ''}" style="align-items:center;" onclick="openGoalDrawer('${goal.id}')">
+    <div style="width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;">
       ${prog.total > 0
       ? `<svg viewBox="0 0 36 36" width="36" height="36" style="position:absolute;transform:rotate(-90deg)">
             <circle cx="18" cy="18" r="14" fill="none" stroke="var(--surface2)" stroke-width="3"/>
@@ -322,11 +322,12 @@ let _editGoalId = null, _goalContentMode = 'edit', _gDraft = {};
 
 function openGoalDrawer(id) {
   _editGoalId = id;
-  const goal = id ? state.goals.find(g => g.id === id) : { title: '', content: '', tags: [], keywords: [] };
+  const goal = id ? state.goals.find(g => g.id === id) : { title: '', content: '', tags: [], keywords: [], history: [] };
   if (!goal) return;
   _goalContentMode = (goal.content && goal.content.trim()) ? 'preview' : 'edit';
   _gDraft = { title: goal.title || '', content: goal.content || '', keywords: (goal.keywords || []).join(', ') };
   window._gTags = [...(goal.tags || [])];
+  if (id && (!goal.history || goal.history.length === 0)) { goal.history = [{ time: new Date().toISOString(), action: 'Goal created' }]; }
   _renderGoalDrawer(goal);
 }
 
@@ -337,6 +338,9 @@ function _renderGoalDrawer(goal) {
   const pct = prog.total > 0 ? Math.round(prog.checked / prog.total * 100) : 0;
   const created = goal.createdAt ? `Created ${new Date(goal.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : id ? '' : 'New goal';
 
+  const currentGoals = state.goals;
+  const idx = currentGoals.findIndex(g => g.id === id);
+
   document.getElementById('modal-root').innerHTML = `
     <div class="drawer-overlay" onclick="closeGoalDrawer()"></div>
     <div class="drawer" id="goal-drawer">
@@ -345,73 +349,93 @@ function _renderGoalDrawer(goal) {
           <input class="drawer-title-input" id="g-title" type="text" value="${esc(_gDraft.title)}" placeholder="Goal title…" oninput="_gAutoSave()">
           <div class="drawer-created">${created}</div>
         </div>
-        <button class="drawer-close" onclick="closeGoalDrawer()">✕</button>
+        <div class="drawer-header-controls">
+          <button class="drawer-close" onclick="closeGoalDrawer()">✕</button>
+        </div>
       </div>
-      <div class="drawer-body">
-
-        <div class="drawer-section">
-          <div class="drawer-section-label">Content</div>
-          <div class="notes-toolbar">
-            <button class="toolbar-btn" onclick="_gIMd('# ')"><b>H1</b></button>
-            <button class="toolbar-btn" onclick="_gIMd('## ')">H2</button>
-            <button class="toolbar-btn" onclick="_gIMd('### ')">H3</button>
-            <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
-            <button class="toolbar-btn" onclick="_gWMd('**','**')"><b>B</b></button>
-            <button class="toolbar-btn" onclick="_gWMd('*','*')"><i>I</i></button>
-            <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
-            <button class="toolbar-btn" onclick="_gIMd('- ')">• List</button>
-            <button class="toolbar-btn" onclick="_gIMd('- [ ] ')">☐ Task</button>
-            <button class="toolbar-btn" onclick="_gIMd('> ')">❝</button>
-            <div style="flex:1"></div>
-            <div class="notes-mode-toggle">
-              <button class="notes-mode-btn${_goalContentMode === 'edit' ? ' active' : ''}" data-mode="edit" onclick="setGoalContentMode('edit')">Write</button>
-              <button class="notes-mode-btn${_goalContentMode === 'preview' ? ' active' : ''}" data-mode="preview" onclick="setGoalContentMode('preview')">Preview</button>
+      <div class="drawer-content-wrap" id="goal-drawer-content">
+        <div class="drawer-body">
+          <div class="drawer-section">
+            <div class="drawer-section-label">Content</div>
+            <div class="notes-toolbar">
+              <button class="toolbar-btn" onclick="_gIMd('# ')"><b>H1</b></button>
+              <button class="toolbar-btn" onclick="_gIMd('## ')">H2</button>
+              <button class="toolbar-btn" onclick="_gIMd('### ')">H3</button>
+              <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
+              <button class="toolbar-btn" onclick="_gWMd('**','**')"><b>B</b></button>
+              <button class="toolbar-btn" onclick="_gWMd('*','*')"><i>I</i></button>
+              <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
+              <button class="toolbar-btn" onclick="_gIMd('- ')">• List</button>
+              <button class="toolbar-btn" onclick="_gIMd('- [ ] ')">☐ Task</button>
+              <button class="toolbar-btn" onclick="_gIMd('> ')">❝</button>
+              <div style="flex:1"></div>
+              <div class="notes-mode-toggle">
+                <button class="notes-mode-btn${_goalContentMode === 'edit' ? ' active' : ''}" data-mode="edit" onclick="setGoalContentMode('edit')">Write</button>
+                <button class="notes-mode-btn${_goalContentMode === 'preview' ? ' active' : ''}" data-mode="preview" onclick="setGoalContentMode('preview')">Preview</button>
+              </div>
             </div>
-          </div>
-          <div id="goal-content-area">
-            ${_goalContentMode === 'edit'
+            <div id="goal-content-area">
+              ${_goalContentMode === 'edit'
       ? `<textarea class="notes-area" id="g-content" placeholder="Describe your goal, add milestones, or track with checkboxes…&#10;&#10;Try: - [ ] milestone" oninput="_gOnInput()" style="min-height:220px">${esc(_gDraft.content)}</textarea>`
       : `<div class="notes-preview md-preview" id="goal-preview-render" style="min-height:80px">${parseMarkdown(_gDraft.content || '', 'goal-' + (id || 'new'))}</div>`}
+            </div>
+            ${prog.total > 0 ? `<div style="margin-top:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:5px"><span>${prog.checked} of ${prog.total} complete</span><span>${pct}%</span></div>
+              <div style="height:4px;background:var(--surface2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width 0.5s ease"></div></div>
+            </div>` : ''}
           </div>
-          ${prog.total > 0 ? `<div style="margin-top:10px">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:5px"><span>${prog.checked} of ${prog.total} complete</span><span>${pct}%</span></div>
-            <div style="height:4px;background:var(--surface2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width 0.5s ease"></div></div>
+
+          <div class="drawer-section">
+            <div class="drawer-section-label">Tags</div>
+            <div class="tag-picker" id="goal-tag-picker">${TAGS.map(t => `<span class="tag ${tagCls(t.id)}${window._gTags.includes(t.id) ? ' tag-selected' : ''}" onclick="toggleGoalTag('${t.id}')">${t.label}</span>`).join('')}</div>
+          </div>
+
+          <div class="drawer-section">
+            <div class="drawer-section-label">Keywords for task alignment</div>
+            <input type="text" id="g-keywords" value="${esc(_gDraft.keywords)}" placeholder="gym, workout, running…" oninput="_gAutoSave()" style="font-size:13.5px">
+            <div style="font-size:11px;color:var(--text3);margin-top:5px">Tasks with these words in the title will surface as aligned to this goal</div>
+          </div>
+
+          ${linked.length > 0 ? `<div class="drawer-section">
+            <div class="drawer-section-label">Aligned tasks</div>
+            ${linked.slice(0, 8).map(t => `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
+              <div class="task-check${t.done ? ' checked' : ''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleTask('${t.id}')"></div>
+              <span style="font-size:13.5px;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${esc(t.title)}</span>
+              ${(t.tags || []).slice(0, 2).map(tg => `<span class="tag ${tagCls(tg)}" style="font-size:10px;padding:1px 6px">${tagLabel(tg)}</span>`).join('')}
+            </div>`).join('')}
+            ${linked.length > 8 ? `<div style="font-size:12px;color:var(--text3);padding-top:8px">+${linked.length - 8} more</div>` : ''}
           </div>` : ''}
+
         </div>
-
-        <div class="drawer-section">
-          <div class="drawer-section-label">Tags</div>
-          <div class="tag-picker" id="goal-tag-picker">${TAGS.map(t => `<span class="tag ${tagCls(t.id)}${window._gTags.includes(t.id) ? ' tag-selected' : ''}" onclick="toggleGoalTag('${t.id}')">${t.label}</span>`).join('')}</div>
-        </div>
-
-        <div class="drawer-section">
-          <div class="drawer-section-label">Keywords for task alignment</div>
-          <input type="text" id="g-keywords" value="${esc(_gDraft.keywords)}" placeholder="gym, workout, running…" oninput="_gAutoSave()" style="font-size:13.5px">
-          <div style="font-size:11px;color:var(--text3);margin-top:5px">Tasks with these words in the title will surface as aligned to this goal</div>
-        </div>
-
-        ${linked.length > 0 ? `<div class="drawer-section">
-          <div class="drawer-section-label">Aligned tasks</div>
-          ${linked.slice(0, 8).map(t => `<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border)">
-            <div class="task-check${t.done ? ' checked' : ''}" style="width:16px;height:16px;flex-shrink:0" onclick="toggleTask('${t.id}')"></div>
-            <span style="font-size:13.5px;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${esc(t.title)}</span>
-            ${(t.tags || []).slice(0, 2).map(tg => `<span class="tag ${tagCls(tg)}" style="font-size:10px;padding:1px 6px">${tagLabel(tg)}</span>`).join('')}
-          </div>`).join('')}
-          ${linked.length > 8 ? `<div style="font-size:12px;color:var(--text3);padding-top:8px">+${linked.length - 8} more</div>` : ''}
-        </div>` : ''}
-
-      </div>
-      <div class="drawer-footer">
-        <div>${id ? `<button class="btn btn-danger btn-sm" onclick="deleteGoal('${id}')">Delete goal</button>` : ''}</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="closeGoalDrawer()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveGoal()">Save</button>
+        <div class="drawer-footer">
+          <div class="footer-left">
+          ${id ? `
+              <div class="drawer-nav-btns">
+                <button class="drawer-nav-btn" onclick="shiftDrawerGoal(-1)" ${idx <= 0 ? 'disabled' : ''} title="Previous goal"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <button class="drawer-nav-btn" onclick="shiftDrawerGoal(1)" ${idx < 0 || idx >= currentGoals.length - 1 ? 'disabled' : ''} title="Next goal"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>
+              </div>
+            ` : ''}
+          </div>
+          <div class="footer-center">
+            
+          </div>
+          <div class="footer-right">
+            ${id ? `
+              <div class="actions-wrap" id="g-actions-wrap">
+                <button class="btn btn-lg" onclick="toggleActionsDrop(event, 'goal', '${id}')">Actions <span style="font-size:10px;opacity:0.5;margin-left:2px">▾</span></button>
+              </div>
+            ` : ''}
+            ${id ? `
+              <button class="btn btn-lg complete-btn${goal.achieved ? ' is-done' : ''}" id="g-complete-btn" onclick="toggleGoalAchieved('${id}')" title="${goal.achieved ? 'Mark incomplete' : 'Mark achieved'}">
+                <span class="cb-icon"></span>
+                <span class="cb-label">${goal.achieved ? 'Achieved' : 'Achieve'}</span>
+              </button>
+            ` : `<button class="btn btn-sm" onclick="closeGoalDrawer()">Cancel</button><button class="btn btn-primary btn-sm" onclick="saveGoal()">Save</button>`}
+          </div>
         </div>
       </div>
     </div>`;
-
-  if (_goalContentMode === 'edit') setTimeout(() => document.getElementById('g-content')?.focus(), 60);
-  else setTimeout(() => document.getElementById('g-title')?.focus(), 60);
+  setTimeout(() => document.getElementById('g-title')?.focus(), 60);
 }
 
 function setGoalContentMode(m) {
@@ -451,12 +475,45 @@ function _gAutoSave() {
   _gTimer = setTimeout(() => {
     const id = _editGoalId; if (!id) return;
     const g = state.goals.find(g => g.id === id); if (!g) return;
+    const oldTitle = g.title, oldContent = g.content;
     g.title = _gDraft.title || g.title;
     g.content = _gDraft.content ?? g.content;
     g.keywords = _gDraft.keywords.split(',').map(k => k.trim()).filter(Boolean);
     g.tags = [...window._gTags];
+    if (oldTitle !== g.title) logActivity(g, `Title updated to: ${g.title}`);
+    if (oldContent !== g.content) logActivity(g, `Content updated`);
     save();
   }, 700);
+}
+
+function toggleGoalAchieved(id) {
+  const goal = state.goals.find(g => g.id === id);
+  if (goal) {
+    goal.achieved = !goal.achieved;
+    save();
+    openGoalDrawer(id); // refresh drawer
+    renderPage();
+  }
+}
+
+function shiftDrawerGoal(delta) {
+  const currentGoals = state.goals;
+  const idx = currentGoals.findIndex(g => g.id === _editGoalId);
+  const nextIdx = idx + delta;
+  if (nextIdx >= 0 && nextIdx < currentGoals.length) {
+    const nextGoal = currentGoals[nextIdx];
+    const content = document.getElementById('goal-drawer-content');
+    if (content) {
+      content.classList.add('nav-slide-out');
+      setTimeout(() => {
+        openGoalDrawer(nextGoal.id);
+        const newContent = document.getElementById('goal-drawer-content');
+        if (newContent) newContent.classList.add('nav-slide-in');
+      }, 200);
+    } else {
+      openGoalDrawer(nextGoal.id);
+    }
+  }
 }
 
 function toggleGoalTag(id) {
@@ -522,17 +579,19 @@ function closeGoalDrawer() {
   if (o) { o.style.transition = 'opacity 0.22s'; o.style.opacity = '0'; }
   setTimeout(() => { document.getElementById('modal-root').innerHTML = ''; renderPage(); }, 230);
 }
+
 let _editTaskId = null, _editWeekKey = null, _notesMode = 'edit';
 
 function openTaskDrawer(id, weekKey, prefill) {
   _editTaskId = id; _editWeekKey = weekKey || state.activeWeek;
-  const task = id ? state.tasks.find(t => t.id === id) : { title: prefill?.title || '', tags: [], effort: 0, impact: 0, startDate: '', endDate: '', reminder: '', notes: '' };
+  const task = id ? state.tasks.find(t => t.id === id) : { title: prefill?.title || '', tags: [], effort: 0, impact: 0, startDate: '', endDate: '', reminder: '', notes: '', history: [] };
   if (!task) return;
   // Preview if existing notes, write if new or empty
   _notesMode = (task.notes && task.notes.trim()) ? 'preview' : 'edit';
   _draft = { title: task.title || '', notes: task.notes || '', startDate: task.startDate || '', endDate: task.endDate || '', reminder: task.reminder || '' };
   window._pTags = [...(task.tags || [])];
   window._pScores = { effort: task.effort || 0, impact: task.impact || 0 };
+  if (id && (!task.history || task.history.length === 0)) { task.history = [{ time: new Date().toISOString(), action: 'Task created' }]; }
   _renderDrawer(task);
 }
 
@@ -542,86 +601,116 @@ function _renderDrawer(task) {
   const isDone = task.done || false;
   const status = task.status || 'todo';
   const statusCfg = _statusCfg(status);
+
+  // Get current list of tasks to enable navigation
+  const currentTasks = state.tasks.filter(t => t.weekKey === _editWeekKey);
+  const idx = currentTasks.findIndex(t => t.id === id);
+
   document.getElementById('modal-root').innerHTML = `
     <div class="drawer-overlay" onclick="closeDrawer()"></div>
     <div class="drawer" id="the-drawer">
       <div class="drawer-header">
         <div class="drawer-header-main">
           <input class="drawer-title-input" id="t-title" type="text" value="${esc(_draft.title ?? task.title)}" placeholder="Task title…" oninput="_dAutoSave()">
-          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
-            <div class="drawer-created">${created}</div>
-            ${id ? `<div class="status-select-wrap" id="status-wrap">
+          <div class="drawer-created">${created}</div>
+        </div>
+        <div class="drawer-header-controls">
+          <button class="drawer-close" onclick="closeDrawer()">✕</button>
+        </div>
+      </div>
+      <div class="drawer-content-wrap" id="drawer-content">
+        <div class="drawer-body">
+          ${id ? `<div class="drawer-section" style="margin-top:0;margin-bottom:20px;">
+            <div class="status-select-wrap" id="status-wrap">
               <div class="status-pill" onclick="toggleStatusDrop(event)">
                 <span class="sp-dot" style="background:${statusCfg.color}"></span>
                 <span>${statusCfg.label}</span>
                 <span class="sp-chevron">▾</span>
               </div>
-            </div>` : ''}
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-          ${id ? `<button class="complete-btn${isDone ? ' is-done' : ''}" id="complete-btn" onclick="completeTask('${id}',${isDone})" title="${isDone ? 'Mark incomplete' : 'Mark complete'}">
-            <span class="cb-icon"></span>
-            <span class="cb-label">${isDone ? 'Completed' : 'Complete'}</span>
-          </button>` : ''}
-          <button class="drawer-close" onclick="closeDrawer()">✕</button>
-        </div>
-      </div>
-      <div class="drawer-body">
-        <div class="drawer-section">
-          <div class="drawer-section-label">Notes &amp; subtasks</div>
-          <div class="notes-toolbar">
-            <button class="toolbar-btn" onclick="_iMd('## ')">H2</button>
-            <button class="toolbar-btn" onclick="_iMd('### ')">H3</button>
-            <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
-            <button class="toolbar-btn" onclick="_wMd('**','**')"><b>B</b></button>
-            <button class="toolbar-btn" onclick="_wMd('*','*')"><i>I</i></button>
-            <button class="toolbar-btn" onclick="_wMd('~~','~~')"><s>S</s></button>
-            <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
-            <button class="toolbar-btn" onclick="_iMd('- ')">• List</button>
-            <button class="toolbar-btn" onclick="_iMd('- [ ] ')">☐ Task</button>
-            <button class="toolbar-btn" onclick="_iMd('> ')">❝</button>
-            <div style="flex:1"></div>
-            <div class="notes-mode-toggle">
-              <button class="notes-mode-btn${_notesMode === 'edit' ? ' active' : ''}" data-mode="edit" onclick="setNotesMode('edit')">Write</button>
-              <button class="notes-mode-btn${_notesMode === 'preview' ? ' active' : ''}" data-mode="preview" onclick="setNotesMode('preview')">Preview</button>
             </div>
-          </div>
-          <div id="notes-content-area">
-            ${_notesMode === 'edit'
+          </div>` : ''}
+          <div class="drawer-section">
+            <div class="drawer-section-label">Notes &amp; subtasks</div>
+            <div class="notes-toolbar">
+              <button class="toolbar-btn" onclick="_iMd('## ')">H2</button>
+              <button class="toolbar-btn" onclick="_iMd('### ')">H3</button>
+              <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
+              <button class="toolbar-btn" onclick="_wMd('**','**')"><b>B</b></button>
+              <button class="toolbar-btn" onclick="_wMd('*','*')"><i>I</i></button>
+              <button class="toolbar-btn" onclick="_wMd('~~','~~')"><s>S</s></button>
+              <div style="width:1px;background:var(--border2);margin:3px 3px;align-self:stretch"></div>
+              <button class="toolbar-btn" onclick="_iMd('- ')">• List</button>
+              <button class="toolbar-btn" onclick="_iMd('- [ ] ')">☐ Task</button>
+              <button class="toolbar-btn" onclick="_iMd('> ')">❝</button>
+              <div style="flex:1"></div>
+              <div class="notes-mode-toggle">
+                <button class="notes-mode-btn${_notesMode === 'edit' ? ' active' : ''}" data-mode="edit" onclick="setNotesMode('edit')">Write</button>
+                <button class="notes-mode-btn${_notesMode === 'preview' ? ' active' : ''}" data-mode="preview" onclick="setNotesMode('preview')">Preview</button>
+              </div>
+            </div>
+            <div id="notes-content-area">
+              ${_notesMode === 'edit'
       ? `<textarea class="notes-area" id="t-notes" placeholder="Add notes, outlines, or subtasks…&#10;&#10;Try: - [ ] subtask" oninput="_onNotesInput()">${esc(notes)}</textarea>`
       : `<div class="notes-preview md-preview">${parseMarkdown(notes, 'task-' + (id || 'new'))}</div>`}
+            </div>
+          </div>
+          <div class="drawer-section">
+            <div class="drawer-section-label">Timing</div>
+            <div class="custom-date-row">
+              <div class="custom-date-input">
+                <label>Start</label>
+                <input type="datetime-local" class="date-trigger" id="t-start" value="${_draft.startDate ?? task.startDate ?? ''}" oninput="_dAutoSave()">
+              </div>
+              <div class="custom-date-input">
+                <label>End</label>
+                <input type="datetime-local" class="date-trigger" id="t-end" value="${_draft.endDate ?? task.endDate ?? ''}" oninput="_dAutoSave()">
+              </div>
+            </div>
+            <div class="custom-date-input">
+              <label>Reminder</label>
+              <input type="datetime-local" class="date-trigger" id="t-reminder" value="${_draft.reminder ?? task.reminder ?? ''}" oninput="_dAutoSave()">
+            </div>
+          </div>
+          <div class="drawer-section">
+            <div class="drawer-section-label">Tags</div>
+            <div class="tag-picker" id="tag-picker">${TAGS.map(t => `<span class="tag ${tagCls(t.id)}${window._pTags.includes(t.id) ? ' tag-selected' : ''}" onclick="toggleTagPick('${t.id}')">${t.label}</span>`).join('')}</div>
+          </div>
+          <div class="drawer-section">
+            <div class="star-row">
+              <div class="score-group"><div class="drawer-section-label">Effort</div><div class="stars" id="stars-effort">${renderStars('effort', window._pScores.effort)}</div><div class="score-label">Energy cost</div></div>
+              <div class="score-group"><div class="drawer-section-label">Joy / Impact</div><div class="stars" id="stars-impact">${renderStars('impact', window._pScores.impact)}</div><div class="score-label">Value brought</div></div>
+            </div>
           </div>
         </div>
-        <div class="drawer-section">
-          <div class="drawer-section-label">Timing</div>
-          <div class="form-row" style="margin-bottom:10px">
-            <div class="form-group" style="margin-bottom:0"><label>Start</label><input type="datetime-local" id="t-start" value="${_draft.startDate ?? task.startDate ?? ''}" oninput="_dAutoSave()"></div>
-            <div class="form-group" style="margin-bottom:0"><label>End</label><input type="datetime-local" id="t-end" value="${_draft.endDate ?? task.endDate ?? ''}" oninput="_dAutoSave()"></div>
+        <div class="drawer-footer">
+          <div class="footer-left">
+            ${id ? `
+              <div class="drawer-nav-btns">
+                <button class="drawer-nav-btn" onclick="shiftDrawerTask(-1)" ${idx <= 0 ? 'disabled' : ''} title="Previous task"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <button class="drawer-nav-btn" onclick="shiftDrawerTask(1)" ${idx < 0 || idx >= currentTasks.length - 1 ? 'disabled' : ''} title="Next task"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>
+              </div>
+            ` : ''}
           </div>
-          <div class="form-group" style="margin-bottom:0"><label>Reminder</label><input type="datetime-local" id="t-reminder" value="${_draft.reminder ?? task.reminder ?? ''}" oninput="_dAutoSave()"></div>
-        </div>
-        <div class="drawer-section">
-          <div class="drawer-section-label">Tags</div>
-          <div class="tag-picker" id="tag-picker">${TAGS.map(t => `<span class="tag ${tagCls(t.id)}${window._pTags.includes(t.id) ? ' tag-selected' : ''}" onclick="toggleTagPick('${t.id}')">${t.label}</span>`).join('')}</div>
-        </div>
-        <div class="drawer-section">
-          <div class="star-row">
-            <div class="score-group"><div class="drawer-section-label">Effort</div><div class="stars" id="stars-effort">${renderStars('effort', window._pScores.effort)}</div><div class="score-label">Energy cost</div></div>
-            <div class="score-group"><div class="drawer-section-label">Joy / Impact</div><div class="stars" id="stars-impact">${renderStars('impact', window._pScores.impact)}</div><div class="score-label">Value brought</div></div>
+          <div class="footer-center">
+            
           </div>
-        </div>
-      </div>
-      <div class="drawer-footer">
-        <div>${id ? `<button class="btn btn-danger btn-sm" onclick="deleteTask('${id}')">Delete task</button>` : ''}</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="closeDrawer()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveTask()">Save</button>
+          <div class="footer-right">
+            ${id ? `
+              <div class="actions-wrap" id="actions-wrap">
+                <button class="btn btn-lg" onclick="toggleActionsDrop(event, 'task', '${id}')">Actions <span style="font-size:10px;opacity:0.5;margin-left:2px">▾</span></button>
+              </div>
+            ` : ''}
+            ${id ? `
+              <button class="btn btn-lg complete-btn${isDone ? ' is-done' : ''}" id="complete-btn" onclick="completeTask('${id}',${isDone})" title="${isDone ? 'Mark incomplete' : 'Mark complete'}">
+                <span class="cb-icon"></span>
+                <span class="cb-label">${isDone ? 'Completed' : 'Complete'}</span>
+              </button>
+            ` : `<button class="btn btn-sm" onclick="closeDrawer()">Cancel</button><button class="btn btn-primary btn-sm" onclick="saveTask()">Save</button>`}
+          </div>
         </div>
       </div>
     </div>`;
-  if (_notesMode === 'edit') setTimeout(() => document.getElementById('t-notes')?.focus(), 60);
-  else setTimeout(() => document.getElementById('t-title')?.focus(), 60);
+  setTimeout(() => document.getElementById('t-title')?.focus(), 60);
 }
 
 // Live draft — always reflects current textarea value, survives mode switches
@@ -679,6 +768,7 @@ function _dCommit() {
     if (!id) return; // new tasks saved on explicit Save only
     const t = state.tasks.find(t => t.id === id);
     if (!t) return;
+    const oldTitle = t.title, oldNotes = t.notes, oldStatus = t.status;
     t.notes = _draft.notes ?? t.notes ?? '';
     t.title = (_draft.title || '').trim() || t.title;
     t.startDate = _draft.startDate ?? '';
@@ -687,6 +777,9 @@ function _dCommit() {
     t.tags = [...window._pTags];
     t.effort = window._pScores.effort;
     t.impact = window._pScores.impact;
+    if (oldTitle !== t.title) logActivity(t, `Title updated to: ${t.title}`);
+    if (oldNotes !== t.notes) logActivity(t, `Notes updated`);
+    if (oldStatus !== t.status) logActivity(t, `Status updated to: ${_statusCfg(t.status).label}`);
     save();
   }, 600);
 }
@@ -724,6 +817,54 @@ function saveTask() {
 }
 function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); save(); closeDrawer(); showToast('Task deleted'); }
 
+function shiftDrawerTask(delta) {
+  const currentTasks = state.tasks.filter(t => t.weekKey === _editWeekKey);
+  const idx = currentTasks.findIndex(t => t.id === _editTaskId);
+  const next = currentTasks[idx + delta];
+  if (next) openTaskDrawer(next.id, _editWeekKey);
+}
+
+function logActivity(item, action) {
+  if (!item.history) item.history = [];
+  item.history.unshift({ time: new Date().toISOString(), action });
+  if (item.history.length > 50) item.history.pop();
+}
+
+function showHistory(type, id) {
+  const item = type === 'task' ? state.tasks.find(t => t.id === id) : state.goals.find(g => g.id === id);
+  if (!item) return;
+  const history = item.history || [];
+  const body = document.querySelector('.drawer-body');
+  if (!body) return;
+
+  const existingLog = document.getElementById('activity-log-overlay');
+  if (existingLog) { existingLog.remove(); return; }
+
+  const logOverlay = document.createElement('div');
+  logOverlay.id = 'activity-log-overlay';
+  logOverlay.style = 'position:absolute;inset:0;background:var(--surface);z-index:20;padding:22px;display:flex;flex-direction:column;animation: drawerIn 0.2s ease;';
+  logOverlay.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div class="drawer-section-label" style="margin-bottom:0">Activity History</div>
+      <button class="drawer-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+    </div>
+    <div class="drawer-body" style="padding:0">
+      <div class="activity-log">
+        ${history.length > 0 ? history.map(h => `
+          <div class="activity-item">
+            <div class="activity-time">${new Date(h.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+            <div class="activity-details">
+              <div class="activity-action">${h.action}</div>
+              <div style="font-size:11px;color:var(--text3)">${new Date(h.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+            </div>
+          </div>
+        `).join('') : '<div style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">No activity recorded yet</div>'}
+      </div>
+    </div>
+  `;
+  document.getElementById('the-drawer')?.appendChild(logOverlay) || document.getElementById('goal-drawer')?.appendChild(logOverlay);
+}
+
 // ─── Status & Complete ────────────────────────────────────────────────────────
 const STATUSES = [
   { id: 'todo', label: 'To do', color: '#ABABAB' },
@@ -739,8 +880,7 @@ function toggleStatusDrop(e) {
   e.stopPropagation();
   const wrap = document.getElementById('status-wrap'); if (!wrap) return;
   const existing = wrap.querySelector('.status-dropdown');
-  if (existing) { existing.remove(); _statusDropOpen = false; return; }
-  _statusDropOpen = true;
+  if (existing) { existing.remove(); return; }
   const task = state.tasks.find(t => t.id === _editTaskId);
   const cur = task?.status || 'todo';
   const drop = document.createElement('div');
@@ -752,8 +892,29 @@ function toggleStatusDrop(e) {
       ${s.id === cur ? `<svg style="margin-left:auto;opacity:0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>` : ''}
     </div>`).join('');
   wrap.appendChild(drop);
-  // close on outside click
-  setTimeout(() => document.addEventListener('click', function _c() { drop.remove(); _statusDropOpen = false; document.removeEventListener('click', _c); }, { once: true }), 10);
+  setTimeout(() => document.addEventListener('click', function _c() { drop.remove(); document.removeEventListener('click', _c); }, { once: true }), 10);
+}
+
+function toggleActionsDrop(e, type, id) {
+  e.stopPropagation();
+  const wrapId = type === 'goal' ? 'g-actions-wrap' : 'actions-wrap';
+  const wrap = document.getElementById(wrapId); if (!wrap) return;
+  const existing = wrap.querySelector('.actions-dropdown');
+  if (existing) { existing.remove(); return; }
+  const drop = document.createElement('div');
+  drop.className = 'actions-dropdown';
+  drop.innerHTML = `
+    <div class="action-item" onclick="showHistory('${type}', '${id}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span>View History</span>
+    </div>
+    <div class="action-item danger" onclick="${type === 'goal' ? `deleteGoal('${id}')` : `deleteTask('${id}')`}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      <span>Delete ${type}</span>
+    </div>
+  `;
+  wrap.appendChild(drop);
+  setTimeout(() => document.addEventListener('click', function _c() { drop.remove(); document.removeEventListener('click', _c); }, { once: true }), 10);
 }
 
 function setStatus(statusId) {
@@ -1314,6 +1475,10 @@ window.navigate = navigate;
 window.openGoalDrawer = openGoalDrawer;
 window.openTaskDrawer = openTaskDrawer;
 window.openWeekPicker = openWeekPicker;
+window.selectWeek = selectWeek;
+window.shiftDrawerTask = shiftDrawerTask;
+window.shiftDrawerGoal = shiftDrawerGoal;
+window.showHistory = showHistory;
 window.parseMarkdown = parseMarkdown;
 window.renderAuthScreen = renderAuthScreen;
 window.renderGoalItem = renderGoalItem;
@@ -1349,6 +1514,8 @@ window.signOut = signOut;
 window.toggleCb = toggleCb;
 window.toggleGoalTag = toggleGoalTag;
 window.toggleStatusDrop = toggleStatusDrop;
+window.toggleActionsDrop = toggleActionsDrop;
+window.toggleGoalAchieved = toggleGoalAchieved;
 window.toggleTagPick = toggleTagPick;
 window.toggleTask = toggleTask;
 window.toggleUserMenu = toggleUserMenu;
